@@ -1,0 +1,141 @@
+---
+title: "ReproducibleResearch"
+output: html_document
+---
+
+##Load packages
+```{r packages, echo=FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+##Read in the Data files from the source
+```{r data}
+Temp <- tempfile()
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",Temp)
+data <- read_delim(unzip(Temp),",",col_types = list(
+  steps = col_double(),
+  date = col_date(),
+  interval = col_double()
+)) 
+unlink(Temp)
+```
+
+## Problem 1: What is mean total number of steps taken per day?
+### Problem 1 - Step 1: 
+Calculate the total number of steps taken per day
+```{r p1s1}
+data.p1s1 <- data %>%
+  group_by(date) %>%
+  summarise(TotalSteps = sum(steps,na.rm = T), .groups = "drop") 
+```
+
+### Problem 1 - Step 2: 
+Make a histogram of the total number of steps taken each day
+```{r p1s2, echo= FALSE}
+ggplot(data = data.p1s1, mapping = aes(x =TotalSteps)) +
+  geom_histogram(color = "blue",binwidth = 2000) +
+  ggtitle( "Steps Per Day")
+```
+
+### Problem 1 - Step 3: 
+Calculate and report the mean and median of the total number of steps taken per day
+```{r p1s3, echo=FALSE}
+data.p1s2 <- data.frame( DailyMean = mean(data.p1s1$TotalSteps,na.rm = T), 
+                         DailyMedian = median(data.p1s1$TotalSteps, na.rm = T))
+print(data.p1s2)
+```
+
+## Problem 2: What is the average daily activity pattern?
+### Problem 2 - Step 1: 
+Determine the Average steps for each interval
+```{r p2s11}
+data.p2s1 <- data %>%
+  group_by(interval) %>%
+  summarise(Ave_Interval_Steps = mean(steps,na.rm = T), .groups = "drop")
+```
+Make a time series plot (type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r p2s12, echo=FALSE}
+
+with(data.p2s1,plot(interval, Ave_Interval_Steps,type = "l"
+               ,ylab = "Average Steps Per 5 Min Interval"
+               ,xlab = "Military Time"
+               ,main = "Ave Steps/per 5 min Interval"
+               ,col = "blue"))
+```
+
+### Problem 2 - Step 2: 
+Which 5-minute interval, on average across all the days in the dataset, contains the 
+maximum number of steps?
+```{r p2s2}
+data.p2s1[which.max(data.p2s1$Ave_Interval_Steps),]
+```
+
+## Problem 3: Imputing missing values
+### Problem 3 - Step 1: 
+Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs
+```{r p3s1}
+sapply(data,function(x){sum(is.na(x))})
+```
+
+### Problem 3 Step 2:
+Replace the NAs with the average steps for the interval/day
+
+### Problem 3 Step 3: 
+Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r p3s3}
+data.p3s2 <- data %>%
+  mutate(day = wday(date)) %>%
+  group_by(interval,day) %>%
+  mutate(steps = ifelse(is.na(steps),mean(steps,na.rm = T),steps)) %>%
+  ungroup() %>%
+  select(-day)
+```
+
+### Problem 3 Step 4: 
+Make a histogram of the total number of steps taken each day with and without NA values
+```{r p3s41, echo=FALSE}
+data.p3s4 <- data.p3s2 %>%
+  group_by(date) %>%
+  summarise(TotalSteps = sum(steps), .groups = "drop")
+
+par(mfrow = c(1,2))
+with(data = data.p3s4, hist(TotalSteps
+     , main = "NAs replaced"))
+with(data = data.p1s1, hist(TotalSteps
+     , main = "NAs excluded"))
+```
+
+Notice the mean and median total number of steps taken per day increase as a result of imputing missing data on the estimates of the total daily number of steps.
+```{r p3s42}
+data.p3s4.sum <- data.frame( DailyMean = mean(data.p3s4$TotalSteps), 
+                         DailyMedian = median(data.p3s4$TotalSteps))
+data.p3s4.sum
+data.p1s2
+```
+##Problem 4: Are there differences in activity patterns between weekdays and weekends?
+###Problem 4 - Step 1: 
+Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+```{r p4s1}
+data.p4s1 <- data.p3s2 %>%
+  mutate(weekend = factor(
+    ifelse(weekdays(date) 
+           %in% c("Saturday","Sunday")
+           ,"Weekend"
+           ,"Weekday")))
+```
+
+##Problem 4 - Step 2: 
+Make a panel plot containing a time series plot (i.e.type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). 
+```{r p4s2}
+data.p4s2 <-data.p4s1 %>%
+  group_by(weekend) %>%
+  mutate(TotalAve = mean(steps))%>%
+  group_by(interval, weekend,TotalAve) %>%
+  summarise(AveSteps = mean(steps), .groups = "drop")
+
+ggplot(data = data.p4s2, mapping = aes(x = interval, y = AveSteps, color = weekend)) +
+  geom_line() +
+  geom_hline(mapping = aes(yintercept = TotalAve, color = weekend))+
+  facet_wrap(~weekend,nrow = 2)
+```
